@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>France Travail - Simulation Messagerie</title>
+<style>
+  body { margin:0; font-family: Arial,sans-serif; background:#f5f7fa; color:#333; }
+  .login-container { display:flex; justify-content:center; align-items:center; height:100vh; }
+  .login-box, .reset-box { background:white; padding:30px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); width:350px; text-align:center; }
+  input, textarea { width:100%; padding:12px; margin:8px 0; border:1px solid #ccc; border-radius:6px; font-size:15px; }
+  button { width:100%; padding:12px; background:#0055a5; color:white; font-size:16px; border:none; border-radius:6px; cursor:pointer; margin-top:10px; }
+  button:hover { background:#003366; }
+  .error { color:red; margin-top:10px; font-size:14px; }
+  .link { margin-top:10px; display:block; cursor:pointer; color:#0055a5; text-decoration:underline; }
+  header { background:#003366; color:white; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { margin:0; font-size:20px; }
+  nav { background:#0055a5; display:flex; gap:10px; padding:10px 15px; }
+  nav button { padding:8px 14px; background:white; color:#003366; border:none; border-radius:6px; cursor:pointer; transition:0.3s; }
+  nav button:hover { background:#e6e6e6; }
+  main { padding:20px; }
+  section { display:none; }
+  section.active { display:block; animation:fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:translateY(0);} }
+  .card { background:white; padding:15px; border-radius:6px; margin-bottom:15px; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+  .btn { display:inline-block; padding:8px 14px; background:#0055a5; color:white; text-decoration:none; border-radius:6px; margin-top:8px; cursor:pointer; }
+  .btn:hover { background:#003366; }
+  #sent-messages { margin-top:10px; background:#f0f0f0; padding:10px; border-radius:6px; max-height:200px; overflow-y:auto; }
+</style>
+</head>
+<body>
+
+<!-- Connexion -->
+<div id="login-page" class="login-container">
+  <div class="login-box">
+    <h2>Connexion France Travail</h2>
+    <input type="text" id="username" placeholder="Identifiant">
+    <input type="password" id="password" placeholder="Mot de passe">
+    <button onclick="login()">Se connecter</button>
+    <span class="link" onclick="showReset()">Mot de passe oublié ?</span>
+    <p class="error" id="error-msg"></p>
+  </div>
+</div>
+
+<!-- Réinitialisation -->
+<div id="reset-page" class="login-container" style="display:none;">
+  <div class="reset-box">
+    <h2>Mot de passe oublié</h2>
+    <input type="text" id="reset-username" placeholder="Identifiant">
+    <input type="date" id="reset-dob" placeholder="Date de naissance">
+    <button onclick="resetPassword()">Récupérer le mot de passe</button>
+    <span class="link" onclick="showLogin()">Retour à la connexion</span>
+    <p class="error" id="reset-msg"></p>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" style="display:none;">
+  <header>
+    <h1>France Travail - Espace Simulation</h1>
+    <button onclick="logout()" style="background:#c0000c; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer;">Déconnexion</button>
+  </header>
+  <nav>
+    <button onclick="showSection('accueil')">🏠 Accueil</button>
+    <button onclick="showSection('messagerie')">📩 Messagerie</button>
+  </nav>
+  <main>
+    <section id="accueil" class="active">
+      <div class="card">
+        <h2>Bienvenue, <span id="display-user"></span></h2>
+        <p>Simulez vos interactions avec votre conseiller.</p>
+      </div>
+    </section>
+
+    <section id="messagerie">
+      <div class="card">
+        <h2>Messagerie</h2>
+        <div id="message-form-container" style="display:none;">
+          <input type="text" id="msg-to" readonly />
+          <input type="text" id="msg-subject" placeholder="Objet" />
+          <textarea id="msg-body" placeholder="Votre message" rows="4"></textarea>
+          <button class="btn" onclick="sendMessage()">Envoyer</button>
+          <p id="msg-confirm" style="color:green;"></p>
+        </div>
+        <button class="btn" onclick="openMessageForm()">Écrire un message</button>
+        <div id="sent-messages"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+// Utilisateurs : 4 demandeurs + 1 conseiller
+const users = [
+  {username:"jean.dupont1", password:"motdepasse123", dob:"1980-05-12", role:"demandeur"},
+  {username:"alice.martin2", password:"motdepasse123", dob:"1992-08-23", role:"demandeur"},
+  {username:"paul.bernard3", password:"motdepasse123", dob:"1985-11-06", role:"demandeur"},
+  {username:"sophie.durand4", password:"motdepasse123", dob:"1990-02-18", role:"demandeur"},
+  {username:"conseiller1", password:"conseiller123", dob:"1975-01-01", role:"conseiller"}
+];
+
+// Messages stockés côté navigateur
+let messages = JSON.parse(localStorage.getItem("messages")) || [];
+
+// Connexion
+function login() {
+  const user = document.getElementById("username").value;
+  const pass = document.getElementById("password").value;
+  const found = users.find(u => u.username===user && u.password===pass);
+  if(found){
+    document.getElementById("login-page").style.display="none";
+    document.getElementById("dashboard").style.display="block";
+    document.getElementById("display-user").innerText=found.username;
+    showSection('accueil');
+    document.getElementById("error-msg").innerText="";
+    if(found.role==="conseiller") showMessagesForConseiller();
+    else showMessagesForUser(found.username);
+  } else {
+    document.getElementById("error-msg").innerText="❌ Identifiant ou mot de passe incorrect";
+  }
+}
+
+// Mot de passe oublié
+function showReset() {
+  document.getElementById("login-page").style.display="none";
+  document.getElementById("reset-page").style.display="flex";
+  document.getElementById("reset-msg").innerText="";
+}
+function showLogin() {
+  document.getElementById("login-page").style.display="flex";
+  document.getElementById("reset-page").style.display="none";
+  document.getElementById("username").value="";
+  document.getElementById("password").value="";
+}
+function resetPassword() {
+  const user = document.getElementById("reset-username").value;
+  const dob = document.getElementById("reset-dob").value;
+  const found = users.find(u=>u.username===user && u.dob===dob);
+  if(found) document.getElementById("reset-msg").innerText=`✅ Votre mot de passe est : ${found.password}`;
+  else document.getElementById("reset-msg").innerText="❌ Utilisateur ou date de naissance incorrecte";
+}
+
+// Dashboard
+function showSection(id) {
+  document.querySelectorAll("section").forEach(sec=>sec.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+function logout() {
+  document.getElementById("dashboard").style.display="none";
+  showLogin();
+}
+
+// Messagerie pour demandeurs
+function openMessageForm() {
+  document.getElementById("message-form-container").style.display="block";
+  document.getElementById("msg-to").value = "conseiller1";
+}
+function sendMessage() {
+  const fromUser = document.getElementById("display-user").innerText;
+  const toUser = document.getElementById("msg-to").value;
+  const subject = document.getElementById("msg-subject").value;
+  const body = document.getElementById("msg-body").value;
+  if(subject.trim()==="" || body.trim()===""){ alert("Veuillez remplir objet et message"); return; }
+  messages.push({from:fromUser, to:toUser, subject, body, date:new Date().toLocaleString()});
+  localStorage.setItem("messages", JSON.stringify(messages));
+  document.getElementById("msg-confirm").innerText="✅ Message envoyé";
+  document.getElementById("msg-subject").value="";
+  document.getElementById("msg-body").value="";
+  if(users.find(u=>u.username===fromUser).role==="conseiller") showMessagesForConseiller();
+  else showMessagesForUser(fromUser);
+}
+
+// Affichage messages pour demandeurs
+function showMessagesForUser(username){
+  let html="";
+  messages.filter(m=>m.from===username || m.to===username).forEach(msg=>{
+    html+=`<p><strong>${msg.date}</strong> - <strong>${msg.from}</strong> ➜ <strong>${msg.to}</strong>: ${msg.subject} - ${msg.body}</p>`;
+  });
+  document.getElementById("sent-messages").innerHTML=html;
+}
+
+// Affichage messages pour conseiller
+function showMessagesForConseiller(){
+  let html="";
+  messages.filter(m=>m.to==="conseiller1").forEach(msg=>{
+    html+=`<p><strong>${msg.date}</strong> - <strong>${msg.from}</strong>: ${msg.subject} - ${msg.body}</p>`;
+  });
+  document.getElementById("sent-messages").innerHTML=html;
+}
+</script>
+
+</body>
+</html>
